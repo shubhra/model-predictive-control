@@ -6,8 +6,12 @@
 using CppAD::AD;
 
 // TODO: Set the timestep length and duration
-size_t N = 0;
-double dt = 0;
+// If N is set too high the simulation will run slower as the solver will have to optimize
+// many more control inputs. Ipopt, the solver, permutes the control input values until
+// it finds the lowest cost.
+
+size_t N = 25;
+double dt = 0.05;
 
 // This value assumes the model presented in the classroom is used.
 //
