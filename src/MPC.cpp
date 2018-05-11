@@ -25,6 +25,17 @@ double dt = 0.05;
 // This is the length from front to CoG that has a similar radius.
 const double Lf = 2.67;
 
+// Ipopt expects all the constraints and variables as vectors so it is best to get the indices
+// for the start and end of each state variable
+size_t x_start = 0;
+size_t y_start = x_start + N;
+size_t psi_start = y_start + N;
+size_t v_start = psi_start + N;
+size_t cte_start = v_start + N;
+size_t epsi_start = cte_start + N;
+size_t delta_start = epsi_start + N;
+size_t a_start = delta_start + N - 1;
+
 class FG_eval {
  public:
   // Fitted polynomial coefficients
@@ -56,9 +67,11 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   // element vector and there are 10 timesteps. The number of variables is:
   //
   // 4 * 10 + 2 * 9
-  size_t n_vars = 0;
+  int state_size = state.size();
+  size_t n_vars = state_size * N + 2 * (N - 1);
+  
   // TODO: Set the number of constraints
-  size_t n_constraints = 0;
+  size_t n_constraints = N * state_size;
 
   // Initial value of the independent variables.
   // SHOULD BE 0 besides initial state.
@@ -69,8 +82,42 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
 
   Dvector vars_lowerbound(n_vars);
   Dvector vars_upperbound(n_vars);
-  // TODO: Set lower and upper limits for variables.
+  
+  // Get the state variables
+  double x = state[0];
+  double y = state[1];
+  double psi = state[2];
+  double v = state[3];
+  double cte = state[4];
+  double epsi = state[5];
+  
+  // Set the initial values in the vars array for state variable
+  vars[x_start] = x;
+  vars[y_start] = y;
+  vars[psi_start] = psi;
+  vars[v_start] = v;
+  vars[cte_start] = cte;
+  vars[epsi_start] = epsi;
 
+  // TODO: Set lower and upper limits for variables.
+  for (int i = 0; i < delta_start; i++) {
+    vars_lowerbound[i] = std::numeric_limits<double>::min();
+    vars_upperbound[i] = std::numeric_limits<double>::max();
+  }
+  
+  // The upper and lower bound for delta (steering angle) are set to [-25, 25] degrees
+  for (int i = delta_start; i < a_start; i++) {
+    vars_lowerbound[i] = -0.436332;
+    vars_upperbound[i] = 0.436332;
+  }
+  
+  // The upper and lower bound for a (acceleration / brake) are set to [-1, 1]
+  // -1 is full brake and 1 is full throttle
+  for (int i = a_start; i < N - 1; i++) {
+    vars_lowerbound[i] = -1;
+    vars_upperbound[i] = 1;
+  }
+  
   // Lower and upper limits for the constraints
   // Should be 0 besides initial state.
   Dvector constraints_lowerbound(n_constraints);
@@ -80,6 +127,20 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
     constraints_upperbound[i] = 0;
   }
 
+  constraints_lowerbound[x_start] = x;
+  constraints_lowerbound[y_start] = y;
+  constraints_lowerbound[psi_start] = psi;
+  constraints_lowerbound[v_start] = v;
+  constraints_lowerbound[cte_start] = cte;
+  constraints_lowerbound[epsi_start] = epsi;
+  
+  constraints_upperbound[x_start] = x;
+  constraints_upperbound[y_start] = y;
+  constraints_upperbound[psi_start] = psi;
+  constraints_upperbound[v_start] = v;
+  constraints_upperbound[cte_start] = cte;
+  constraints_upperbound[epsi_start] = epsi;
+  
   // object that computes objective and constraints
   FG_eval fg_eval(coeffs);
 
@@ -121,5 +182,14 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   //
   // {...} is shorthand for creating a vector, so auto x1 = {1.0,2.0}
   // creates a 2 element double vector.
-  return {};
+  
+  // First push the two control inputs into the result
+  vector<double> result = {solution.x[delta_start], solution.x[a_start]};
+  
+  // Then push all the x, y values to the result for drawing the predicted trajectory
+  for (int i = 0; i < N; ++i){
+    result.push_back(solution.x[x_start + i]);
+    result.push_back(solution.x[y_start + i]);
+  }
+  return result;
 }

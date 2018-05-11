@@ -123,11 +123,14 @@ int main() {
           *
           */
 
-          vector<double> control_inputs = mpc.Solve(state, coeffs);
+          vector<double> result = mpc.Solve(state, coeffs);
           
-          double steer_value = control_inputs[0];
-          double throttle_value = control_inputs[1];
-
+          double steer_value = result[0];
+          double throttle_value = result[1];
+          
+          // The steering value should be between -1 and 1
+          steer_value /= deg2rad(25);
+          
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
           // Otherwise the values will be in between [-deg2rad(25), deg2rad(25] instead of [-1, 1].
@@ -137,6 +140,13 @@ int main() {
           //Display the MPC predicted trajectory 
           vector<double> mpc_x_vals;
           vector<double> mpc_y_vals;
+          
+          // Get the x, y values from the result vector. Remember the first two values were
+          // steering angle and throttle so skip those
+          for (int i = 2; i < result.size(); ++i) {
+            mpc_x_vals.push_back(result[i]);
+            mpc_y_vals.push_back(result[i + 1]);
+          }
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Green line
