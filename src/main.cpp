@@ -17,6 +17,9 @@ constexpr double pi() { return M_PI; }
 double deg2rad(double x) { return x * pi() / 180; }
 double rad2deg(double x) { return x * 180 / pi(); }
 
+// Center of gravity needed related to psi and epsi
+const double invLf = 1.0/2.67;
+
 // Checks if the SocketIO event has JSON data.
 // If there is data the JSON object in string format will be returned,
 // else the empty string "" will be returned.
@@ -91,30 +94,44 @@ int main() {
           double py = j[1]["y"];
           double psi = j[1]["psi"];
           double v = j[1]["speed"];
+          double delta = j[1]["steering_angle"];
+          double a = j[1]["throttle"];
 
           // Translate from map space to car space the x and y waypoints
-          Eigen::VectorXd ptsx_car, ptsy_car;
+          Eigen::VectorXd ptsx_car(ptsx.size()), ptsy_car(ptsy.size());
           for (int i = 0; i < ptsx.size(); ++i) {
             double dx = ptsx[i] - px;
             double dy = ptsy[i] - py;
-            ptsx_car[i] = dx * cos(psi) + dy * sin(psi);
-            ptsy_car[i] = dy * cos(psi) - dx * sin(psi);
+            ptsx_car[i] = dx * cos(-psi) - dy * sin(-psi);
+            ptsy_car[i] = dx * sin(-psi) + dy * cos(-psi);
           }
-          
+                    
           // Fit a polynomial to the above ptsx and ptsy coordinates
-          Eigen::VectorXd coeffs = polyfit(ptsx_car, ptsy_car, 3);
+          auto coeffs = polyfit(ptsx_car, ptsy_car, 3);
           
           // Calculate the cross track error
-          double cte = polyeval(coeffs, px) - py;
-          
+          double cte = polyeval(coeffs, 0);
+
           // Calculate the orientation error. Recall orientation error is calculated as follows
           // eψ = ψ − ψdes, where ψdes can be calculated as arctan(f'(x))
           // f(x) = a0 + a1∗x
           // f'(x) = a1
-          double epsi = psi - atan(coeffs[1]);
+          double epsi = - atan(coeffs[1]);
           
+          // Latency for predicting time at actuation
+          const double latency = 0.1;
+          
+          // Predict state after latency
+          // Inital x, y and psi are all zero
+          double pred_px = v * latency; // x + (v * cos(psi) * latency)
+          const double pred_py = 0.0; // Since sin(0) = 0, y stays as 0 (y + v * sin(psi) * latency)
+          double pred_psi = v * (-delta) * invLf * latency;
+          double pred_v = v + a * latency;
+          double pred_cte = cte + (v * sin(epsi) * latency);
+          double pred_epsi = epsi - (v * delta * invLf * latency);
+
           Eigen::VectorXd state(6);
-          state << px, py, psi, v, cte, epsi;
+          state << pred_px, pred_py, pred_psi, pred_v, pred_cte, pred_epsi;
 
           /*
           * TODO: Calculate steering angle and throttle using MPC.
@@ -129,7 +146,7 @@ int main() {
           double throttle_value = result[1];
           
           // The steering value should be between -1 and 1
-          steer_value /= deg2rad(25);
+          //steer_value /= deg2rad(25);
           
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
@@ -143,7 +160,7 @@ int main() {
           
           // Get the x, y values from the result vector. Remember the first two values were
           // steering angle and throttle so skip those
-          for (int i = 2; i < result.size(); ++i) {
+          for (int i = 2; i < result.size(); i += 2) {
             mpc_x_vals.push_back(result[i]);
             mpc_y_vals.push_back(result[i + 1]);
           }
@@ -157,6 +174,11 @@ int main() {
           //Display the waypoints/reference line
           vector<double> next_x_vals;
           vector<double> next_y_vals;
+          
+          for (int i = 1; i < ptsx_car.size(); i++){
+            next_x_vals.push_back(ptsx_car[i]);
+            next_y_vals.push_back(ptsy_car[i]);
+          }
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Yellow line
