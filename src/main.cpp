@@ -18,7 +18,8 @@ double deg2rad(double x) { return x * pi() / 180; }
 double rad2deg(double x) { return x * 180 / pi(); }
 
 // Center of gravity needed related to psi and epsi
-const double invLf = 1.0/2.67;
+const double Lf = 2.67;
+const double invLf = 1.0/Lf;
 
 // Checks if the SocketIO event has JSON data.
 // If there is data the JSON object in string format will be returned,
@@ -106,7 +107,7 @@ int main() {
             ptsy_car[i] = dx * sin(-psi) + dy * cos(-psi);
           }
                     
-          // Fit a polynomial to the above ptsx and ptsy coordinates
+          // Fit a polynomial to the above ptsx and ptsy car coordinates
           auto coeffs = polyfit(ptsx_car, ptsy_car, 3);
           
           // Calculate the cross track error
@@ -115,7 +116,7 @@ int main() {
           // Calculate the orientation error. Recall orientation error is calculated as follows
           // eψ = ψ − ψdes, where ψdes can be calculated as arctan(f'(x))
           // f(x) = a0 + a1∗x
-          // f'(x) = a1
+          // f'(x) = a1 and ψ = 0
           double epsi = - atan(coeffs[1]);
           
           // Latency for predicting time at actuation
@@ -124,7 +125,7 @@ int main() {
           // Predict state after latency
           // Inital x, y and psi are all zero
           double pred_px = v * latency; // x + (v * cos(psi) * latency)
-          const double pred_py = 0.0; // Since sin(0) = 0, y stays as 0 (y + v * sin(psi) * latency)
+          double pred_py = 0.0; // Since sin(0) = 0, y stays as 0 (y + v * sin(psi) * latency)
           double pred_psi = v * (-delta) * invLf * latency;
           double pred_v = v + a * latency;
           double pred_cte = cte + (v * sin(epsi) * latency);
@@ -134,23 +135,20 @@ int main() {
           state << pred_px, pred_py, pred_psi, pred_v, pred_cte, pred_epsi;
 
           /*
-          * TODO: Calculate steering angle and throttle using MPC.
+          * Calculate steering angle and throttle using MPC.
           *
           * Both are in between [-1, 1].
           *
           */
 
           vector<double> result = mpc.Solve(state, coeffs);
-          
           double steer_value = result[0];
           double throttle_value = result[1];
-          
-          // The steering value should be between -1 and 1
-          //steer_value /= deg2rad(25);
           
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
           // Otherwise the values will be in between [-deg2rad(25), deg2rad(25] instead of [-1, 1].
+          steer_value /= deg2rad(25) * Lf;
           msgJson["steering_angle"] = steer_value;
           msgJson["throttle"] = throttle_value;
 
