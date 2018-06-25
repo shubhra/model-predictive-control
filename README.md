@@ -7,7 +7,7 @@ Implement Model Predictive Control to drive a car around a track in a simulated 
 
 ## The Model
 
-I have descrived the model great detail in this [article](https://medium.com/@shubhra.pandit/model-predictive-control-for-autonomous-vehicles-1dc18348f651)
+I have descrived the model in great detail in this [article](https://medium.com/@shubhra.pandit/model-predictive-control-for-autonomous-vehicles-1dc18348f651)
 
 ## N and dt
 
